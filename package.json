@@ -1,0 +1,16 @@
+{
+  "name": "SmartPotServer",
+  "version": "1.0.0",
+  "description": "Server side for SmartPot product",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  },
+  "devDependencies": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
