@@ -4,12 +4,15 @@
   "description": "Server side for SmartPot product",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "express": "^4.17.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "jest": "^29.6.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC"
