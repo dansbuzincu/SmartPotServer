@@ -6,7 +6,11 @@ const router = express.Router();
 router.get('/', (req, res) => {
 
     const testToken = tokenUtils.generateToken();
-    res.send('Generated test token of : ' + testToken);
+    const hashToken = tokenUtils.hashToken(testToken);
+    res.json({
+        testToken,
+        hashToken
+    });
 });
 
 // Export the router
