@@ -1,14 +1,20 @@
-const http = require('http');
+const express = require('express');
 const routes = require('./routes/index');
 const logger = require('./utils/logger');
 
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((req, res) => {
+const app = express();
+
+// simple request logger middleware
+app.use((req, res, next) => {
     logger(`Received request for ${req.url}`);
-    routes(req, res);
+    next();
 });
 
-server.listen(PORT, () => {
+// mount routes
+app.use('/', routes);
+
+app.listen(PORT, () => {
     logger(`Server is running on http://localhost:${PORT}`);
 });
