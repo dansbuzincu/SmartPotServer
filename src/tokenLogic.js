@@ -20,7 +20,7 @@ function createTokenValidator(database) {
 
     try {
       const response = await database.query('SELECT 1 FROM devices WHERE token_hash = $1', [hashToken]);
-      const rowCount = res && (typeof res.rowCount === 'number' ? res.rowCount : (res.rowCount || 0));
+      const rowCount = response && (typeof response.rowCount === 'number' ? response.rowCount : (response.rowCount || 0));
       return { ok: true, valid: rowCount === 1 };
     }
     catch (err) {

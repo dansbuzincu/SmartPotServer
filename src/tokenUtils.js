@@ -5,7 +5,11 @@ function generateToken() {
 }
 
 function hashToken(token) {
-  return crypto.createHash('sha256').update(token).digest('hex');
+  return crypto.createHash('sha256').update(token).digest('base64url');
 }
 
-module.exports = { generateToken, hashToken };
+function buildClaimUrl(token) {
+  const CLAIM_BASE_URL = process.env.BASE_URL || 'http://localhost:3000/';
+  return '${CLAIM_BASE_URL}/claim?token=${encodeURIComponent(token)}';
+}
+module.exports = { generateToken, hashToken, buildClaimUrl };
