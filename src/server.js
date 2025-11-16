@@ -12,8 +12,11 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use(express.json());
+
 // mount routes
 app.use('/', routes);
+
 
 app.listen(PORT, () => {
     logger(`Server is running on http://localhost:${PORT}`);
