@@ -1,15 +1,22 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 function generateToken() {
-  return crypto.randomBytes(32).toString('base64url'); // URL-safe
+  // 32 bytes → base64url string
+  return crypto.randomBytes(32).toString('base64url');
 }
 
 function hashToken(token) {
+  // SHA-256 → base64url (matches your DB schema)
   return crypto.createHash('sha256').update(token).digest('base64url');
 }
 
 function buildClaimUrl(token) {
-  const CLAIM_BASE_URL = process.env.BASE_URL || 'http://localhost:3000/';
-  return '${CLAIM_BASE_URL}/claim?token=${encodeURIComponent(token)}';
+  const CLAIM_BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+  return `${CLAIM_BASE_URL}/claim?token=${encodeURIComponent(token)}`;
 }
-module.exports = { generateToken, hashToken, buildClaimUrl };
+
+export default {
+  generateToken,
+  hashToken,
+  buildClaimUrl
+};

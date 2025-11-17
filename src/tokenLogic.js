@@ -1,15 +1,14 @@
-const tokenUtils = require('./tokenUtils');
+import tokenUtils from './tokenUtils.js';
 
 // Create validator via factory with dependency injection
-
 function createTokenValidator(database) {
 
   // Throw error in case of null database
-  if(database == null) {
+  if (!database) {
     throw new Error('Database instance required');
   }
 
-  // Return error in case token is missing
+  // Validate a token by hashing and checking in DB
   async function validateToken(token) {
     if (!token) {
       return { ok: false, error: 'missing-token' };
@@ -19,15 +18,26 @@ function createTokenValidator(database) {
     const hashToken = tokenUtils.hashToken(token);
 
     try {
-      const response = await database.query('SELECT 1 FROM devices WHERE token_hash = $1', [hashToken]);
-      const rowCount = response && (typeof response.rowCount === 'number' ? response.rowCount : (response.rowCount || 0));
+      const response = await database.query(
+        'SELECT 1 FROM devices WHERE token_hash = $1',
+        [hashToken]
+      );
+
+      const rowCount =
+        response && typeof response.rowCount === 'number'
+          ? response.rowCount
+          : 0;
+
       return { ok: true, valid: rowCount === 1 };
-    }
-    catch (err) {
-      return { ok: false, error: err && err.message ? err.message : String(err) };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err && err.message ? err.message : String(err),
+      };
     }
   }
+
   return { validateToken };
 }
 
-module.exports = { createTokenValidator };
+export { createTokenValidator };
