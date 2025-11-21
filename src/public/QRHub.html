@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>QRHub</title>
+  <link rel="stylesheet" href="/css/QRHub.css" />
+</head>
+<body>
+  <div class="card">
+    <h1><span class="logo-dot"></span> QRHub</h1>
+    <p class="subtitle">
+      Generate a claim token, preview the QR, then save it and insert the device into the database.
+    </p>
+
+    <div class="field-group">
+      <label for="uniqueId">Unique ID (device)</label>
+      <input id="uniqueId" placeholder="e.g. ESP32-ABC123" />
+    </div>
+
+    <div class="field-group">
+      <label for="deviceName">Name (optional)</label>
+      <input id="deviceName" placeholder="e.g. Kitchen plant pot" />
+    </div>
+
+    <div class="buttons-row">
+      <button id="generateBtn" class="primary" type="button">
+        Generate Token & QR
+      </button>
+    </div>
+
+    <div class="buttons-row">
+      <button id="downloadBtn" class="secondary" type="button" disabled>
+        Download QR
+      </button>
+      <button id="insertBtn" class="secondary" type="button" disabled>
+        Insert into DB
+      </button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="qrWrapper" class="qr-wrapper">
+      <canvas id="qrCanvas"></canvas>
+      <div class="qr-caption" id="qrCaption"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@latest/build/qrcode.min.js"></script>
+  <script src="/js/QRHub.js"></script>
+</body>
+</html>

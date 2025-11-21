@@ -1,6 +1,4 @@
-function logMessage(message) {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${message}`);
+export default function logMessage(message) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`);
 }
-
-module.exports = logMessage;
