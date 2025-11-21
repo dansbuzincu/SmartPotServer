@@ -45,7 +45,7 @@ function tableDataManager(database) {
 
     async function insertRow(row) {
         const queryText =
-            'INSERT INTO devices (unique_id, token_hash, claimed, name) VALUES ($1, $2, $3, $4) RETURNING *';
+            'INSERT INTO devices (unique_id, claim_token, claimed, name) VALUES ($1, $2, $3, $4) RETURNING *';
         const queryValues = [row.unique_id, row.token_hash, row.claimed, row.name];
 
         try {

@@ -116,4 +116,18 @@ router.post('/devices/insert', async (req, res) => {
     }
 });
 
+router.post('/token/generate', async (req, res) => {
+    try {
+    // generate a new raw token, compute its hash and build the claim URL
+    const token = tokenUtils.generateToken();
+    const token_hash = tokenUtils.hashToken(token);
+    const claimUrl = tokenUtils.buildClaimUrl(token);
+
+    // return what the frontend expects
+    return res.status(201).json({ success: true, token, token_hash, claimUrl });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
 export default router;

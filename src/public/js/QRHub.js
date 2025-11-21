@@ -26,7 +26,8 @@ generateBtn.addEventListener('click', async () => {
   currentTokenHash = null;
   currentClaimUrl = null;
 
-  try {
+  try 
+  {
     const res = await fetch('/api/token/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
@@ -40,24 +41,59 @@ generateBtn.addEventListener('click', async () => {
 
     currentTokenHash = data.token_hash;
     currentClaimUrl = data.claimUrl;
+    
+    let statusMsg = '';
+    console.log('Generating QR', { currentClaimUrl, QRCodeDefined: typeof QRCode !== 'undefined' });
+    if (!currentClaimUrl) throw new Error('Missing claimUrl');
+    if (typeof QRCode === 'undefined') throw new Error('QRCode library not loaded');
 
-    setStatus('Token generated. QR is ready.', 'success');
+    try {
+      // make visible so canvas has layout/size
+      const prevDisplay = qrWrapper.style.display;
+      qrWrapper.style.display = 'flex';
 
-    await new Promise((resolve, reject) => {
-      QRCode.toCanvas(qrCanvas, currentClaimUrl, { width: 220 }, function (err) {
-        if (err) reject(err);
-        else resolve();
+      await new Promise((resolve, reject) => {
+        QRCode.toCanvas(qrCanvas, currentClaimUrl, { width: 220 }, function (err) {
+          if (err) reject(err);
+          else resolve();
+        });
       });
-    });
+
+      qrWrapper.style.display = prevDisplay;
+      } catch (err) {
+      statusMsg = 'QR code generation failed';
+      console.error('QRCode.toCanvas failed:', err);
+
+      // fallback: draw into an offscreen canvas and copy into visible canvas
+      try {
+        const tmp = document.createElement('canvas');
+        await new Promise((resolve, reject) => {
+          QRCode.toCanvas(tmp, currentClaimUrl, { width: 220 }, function (e) {
+            if (e) reject(e);
+            else resolve();
+          });
+        });
+        // copy image from tmp to visible canvas
+        qrCanvas.width = tmp.width;
+        qrCanvas.height = tmp.height;
+        const ctx = qrCanvas.getContext('2d');
+        ctx.drawImage(tmp, 0, 0);
+      } catch (err2) {
+        console.error('QR fallback also failed:', err2);
+        statusMsg = 'QR code generation failed (fallback)';
+        throw err2; // will be caught by outer try/catch and show "Error contacting server"
+      }
+    }
 
     qrCaption.textContent = 'This QR encodes the claim URL for the generated token.';
     qrWrapper.style.display = 'flex';
     downloadBtn.disabled = false;
     insertBtn.disabled = false;
-  } catch (err) {
-    console.error(err);
-    setStatus('Error contacting server', 'error');
-  }
+    } catch (err) {
+      console.error(err);
+      statusMsg = 'Error contacting server', 'error';
+      setStatus(statusMsg, 'error');
+    }
 });
 
 downloadBtn.addEventListener('click', () => {
