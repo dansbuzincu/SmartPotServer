@@ -53,7 +53,7 @@ generateBtn.addEventListener('click', async () => {
       qrWrapper.style.display = 'flex';
 
       await new Promise((resolve, reject) => {
-        QRCode.toCanvas(qrCanvas, currentClaimUrl, { width: 220 }, function (err) {
+        QRCode.toCanvas(qrCanvas, currentClaimUrl, { width: 400 }, function (err) {
           if (err) reject(err);
           else resolve();
         });
@@ -68,7 +68,7 @@ generateBtn.addEventListener('click', async () => {
       try {
         const tmp = document.createElement('canvas');
         await new Promise((resolve, reject) => {
-          QRCode.toCanvas(tmp, currentClaimUrl, { width: 220 }, function (e) {
+          QRCode.toCanvas(tmp, currentClaimUrl, { width: 400 }, function (e) {
             if (e) reject(e);
             else resolve();
           });
@@ -83,7 +83,7 @@ generateBtn.addEventListener('click', async () => {
         statusMsg = 'QR code generation failed (fallback)';
         throw err2; // will be caught by outer try/catch and show "Error contacting server"
       }
-    }
+  }
 
     qrCaption.textContent = 'This QR encodes the claim URL for the generated token.';
     qrWrapper.style.display = 'flex';

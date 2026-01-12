@@ -12,7 +12,7 @@ function hashToken(token) {
 
 function buildClaimUrl(token) {
   const CLAIM_BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-  return `${CLAIM_BASE_URL}/claim?token=${encodeURIComponent(token)}`;
+  return `${CLAIM_BASE_URL}/api/claim?token=${encodeURIComponent(token)}`;
 }
 
 export default {
