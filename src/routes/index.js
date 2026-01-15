@@ -17,25 +17,31 @@ router.get('/', (req, res) => {
 CDatabaseManager.init && CDatabaseManager.init();
 const tableDataManagerInstance = tableDataManager(CDatabaseManager);
 
-// Define route for claiming a token
-router.post('/token/claim', async (req, res) => {
+router.get('/claim', async (req, res) => {
     // Verify if token is provided in request body
-    const token = req.body && typeof req.body.token === 'string' ? req.body.token.trim() : null;
+    const token = (req.query && typeof req.query.token === 'string')
+        ? req.query.token.trim()
+        : (req.body && typeof req.body.token === 'string' ? req.body.token.trim() : null);
     if (!token) {
         return res.status(400).json({ success: false, message: 'Token is not provided or provided as wrong type' });
     }
 
+    // If token is provided, validate it
     try {
         const validation = await tableDataManagerInstance.queryForToken(token);
+
+        // If token not found -> log error
         if (!validation.ok) {
             return res.status(500).json({ success: false, error: validation.error });
         }
-
-        // build a claim url and return it
-        const claimUrl = tokenUtils.buildClaimUrl(token);
-        logMessage(`Token ${token} verification result: ${validation.valid}`);
-        return res.status(200).json({ success: true, claimUrl, valid: validation.valid });
-    } catch (err) {
+        // Update claim status of input token
+        const claimResult = await tableDataManagerInstance.claimToken(token);
+        if (!claimResult.ok) {
+            return res.status(500).json({ success: false, error: claimResult.error });
+        }
+        return res.status(200).json({ success: true, claimedDevice: claimResult.device });
+    }
+    catch (err) {
         return res.status(500).json({ success: false, message: 'Server error', error: err.message || String(err) });
     }
 });

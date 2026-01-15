@@ -14,8 +14,7 @@ function createTokenValidator(database) {
       return { ok: false, error: 'missing-token' };
     }
 
-    // Generate hash for input token
-    const hashToken = tokenUtils.hashToken(token);
+    const hashToken = token;
 
     try {
       const response = await database.query(
@@ -30,6 +29,7 @@ function createTokenValidator(database) {
 
       return { ok: true, valid: rowCount === 1 };
     } catch (err) {
+      Logger(`Error querying for token: ${err.message || String(err)}`);
       return {
         ok: false,
         error: err && err.message ? err.message : String(err),
