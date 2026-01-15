@@ -14,9 +14,6 @@ function createTokenValidator(database) {
       return { ok: false, error: 'missing-token' };
     }
 
-    // Generate hash for input token
-    // TODO : !!! Decide where the hashing validation should happen
-    // const hashToken = tokenUtils.hashToken(token);
     const hashToken = token;
 
     try {

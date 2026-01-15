@@ -17,29 +17,6 @@ router.get('/', (req, res) => {
 CDatabaseManager.init && CDatabaseManager.init();
 const tableDataManagerInstance = tableDataManager(CDatabaseManager);
 
-// // Define route for claiming a token
-// router.post('/token/claim', async (req, res) => {
-//     // Verify if token is provided in request body
-//     const token = req.body && typeof req.body.token === 'string' ? req.body.token.trim() : null;
-//     if (!token) {
-//         return res.status(400).json({ success: false, message: 'Token is not provided or provided as wrong type' });
-//     }
-
-//     try {
-//         const validation = await tableDataManagerInstance.queryForToken(token);
-//         if (!validation.ok) {
-//             return res.status(500).json({ success: false, error: validation.error });
-//         }
-
-//         // build a claim url and return it
-//         const claimUrl = tokenUtils.buildClaimUrl(token);
-//         logMessage(`Token ${token} verification result: ${validation.valid}`);
-//         return res.status(200).json({ success: true, claimUrl, valid: validation.valid });
-//     } catch (err) {
-//         return res.status(500).json({ success: false, message: 'Server error', error: err.message || String(err) });
-//     }
-// });
-
 router.get('/claim', async (req, res) => {
     // Verify if token is provided in request body
     const token = (req.query && typeof req.query.token === 'string')
