@@ -1,7 +1,9 @@
 import express from 'express';
 import tokenUtils from '../tokenUtils.js';
-import { tableDataManager } from '../tableDataManager.js';
-import CDatabaseManager from '../databaseLogic.js';
+import CDatabaseManager from '../database/CDatabaseManager.js';
+import DevicesRepo from '../repos/DevicesRepo.js';
+import DeviceService from '../services/DeviceService.js';
+import TokenService from '../services/TokenService.js';
 import logMessage from '../utils/logger.js';
 
 const router = express.Router();
@@ -13,9 +15,6 @@ router.get('/', (req, res) => {
     res.json({ testToken, hashToken });
 });
 
-// initialize DB pool (no returned instance)
-CDatabaseManager.init && CDatabaseManager.init();
-const tableDataManagerInstance = tableDataManager(CDatabaseManager);
 
 router.get('/claim', async (req, res) => {
     // Verify if token is provided in request body
@@ -39,7 +38,7 @@ router.get('/claim', async (req, res) => {
         if (!claimResult.ok) {
             return res.status(500).json({ success: false, error: claimResult.error });
         }
-        return res.status(200).json({ success: true, claimedDevice: claimResult.device });
+        return res.status(200).json({ success: true, claimed_device: claimResult.device });
     }
     catch (err) {
         return res.status(500).json({ success: false, message: 'Server error', error: err.message || String(err) });
@@ -63,7 +62,7 @@ router.post('/test-insert', async (req, res) => {
     }
 
     try {
-        const rowToInsert = await tableDataManagerInstance.composeRow(token);
+        const rowToInsert = await tableDataManagerInstance.newDeviceRow(token);
         const insertResult = await tableDataManagerInstance.insertRow(rowToInsert);
         if (!insertResult || !insertResult.ok) {
             return res.status(500).json({
@@ -99,7 +98,8 @@ router.post('/devices/insert', async (req, res) => {
     };
 
     try {
-        const insertResult = await tableDataManagerInstance.insertRow(row);
+        const deviceService = req.app.locals.services.deviceService;
+        const insertResult = await deviceService.createDeviceRow(row);
 
         if (!insertResult.ok) {
             return res.status(500).json({
@@ -122,15 +122,13 @@ router.post('/devices/insert', async (req, res) => {
     }
 });
 
-router.post('/token/generate', async (req, res) => {
+router.get('/token/generate', async (req, res) => {
     try {
-    // generate a new raw token, compute its hash and build the claim URL
-    const token = tokenUtils.generateToken();
-    const token_hash = tokenUtils.hashToken(token);
-    const claimUrl = tokenUtils.buildClaimUrl(token);
+    const {tokenService} = req.app.locals.services;
+    const { token, tokenHash, claimUrl } = tokenService.generateClaimToken();
 
     // return what the frontend expects
-    return res.status(201).json({ success: true, token, token_hash, claimUrl });
+    return res.status(201).json({ success: true, token, token_hash: tokenHash, claimUrl });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message || String(err) });
   }

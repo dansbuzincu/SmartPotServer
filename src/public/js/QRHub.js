@@ -29,7 +29,7 @@ generateBtn.addEventListener('click', async () => {
   try 
   {
     const res = await fetch('/api/token/generate', {
-      method: 'POST',
+      method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
     const data = await res.json();
