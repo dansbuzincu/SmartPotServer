@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
     res.json({ testToken, hashToken });
 });
 
-
+// Route used by user to claim a device
 router.get('/claim', async (req, res) => {
     // Verify if token is provided in request body
     const token = (req.query && typeof req.query.token === 'string')
@@ -27,53 +27,21 @@ router.get('/claim', async (req, res) => {
 
     // If token is provided, validate it
     try {
-        const validation = await tableDataManagerInstance.queryForToken(token);
+        const deviceService = req.app.locals.services.deviceService;
+        const validation = await deviceService.validateToken(token);
 
         // If token not found -> log error
         if (!validation.ok) {
             return res.status(500).json({ success: false, error: validation.error });
         }
         // Update claim status of input token
-        const claimResult = await tableDataManagerInstance.claimToken(token);
+        const claimResult = await deviceService.claimDevice(token);
         if (!claimResult.ok) {
             return res.status(500).json({ success: false, error: claimResult.error });
         }
         return res.status(200).json({ success: true, claimed_device: claimResult.device });
     }
     catch (err) {
-        return res.status(500).json({ success: false, message: 'Server error', error: err.message || String(err) });
-    }
-});
-
-// Define test route for inserting a token
-// Helpful GET for quick browser check
-router.get('/test-insert', (req, res) => {
-    return res.status(200).json({
-        success: true,
-        method: 'POST',
-        message: 'Use POST /test-insert with JSON {"token":"..."} to insert a test token'
-    });
-});
-
-router.post('/test-insert', async (req, res) => {
-    const token = req.body && typeof req.body.token === 'string' ? req.body.token.trim() : null;
-    if (!token) {
-        return res.status(400).json({ success: false, message: 'Token is not provided or provided as wrong type' });
-    }
-
-    try {
-        const rowToInsert = await tableDataManagerInstance.newDeviceRow(token);
-        const insertResult = await tableDataManagerInstance.insertRow(rowToInsert);
-        if (!insertResult || !insertResult.ok) {
-            return res.status(500).json({
-                success: false,
-                error: insertResult && insertResult.error ? insertResult.error : 'insert failed'
-            });
-        }
-
-        logMessage('Row insertion result:', insertResult);
-        return res.status(200).json({ success: true, result: insertResult });
-    } catch (err) {
         return res.status(500).json({ success: false, message: 'Server error', error: err.message || String(err) });
     }
 });
