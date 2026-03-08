@@ -1,13 +1,13 @@
 import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 import routes from './routes/index.js';
 import logger from './utils/logger.js';
 import CDatabaseManager from './database/CDatabaseManager.js';
 import DevicesRepo from './repos/DevicesRepo.js';
+import MqttCredsRepo from './repos/MqttCredsRepo.js';
 import DeviceService from './services/DeviceService.js';
-import TokenService from './services/TokenService.js';
+import MqttCredService from './services/MqttCredService.js';
+import OnboardingService from './services/OnboardingService.js';
 
 function buildSmartPotConfigFromEnv() {
   const connectionString = process.env.DATABASE_URL || null;
@@ -39,19 +39,17 @@ function buildSmartPotConfigFromEnv() {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Required to emulate __dirname in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ===== Dependency Injection (composition root) =====
 
 const db = new CDatabaseManager(buildSmartPotConfigFromEnv());
 const devicesRepo = new DevicesRepo(db);
+const mqttCredsRepo = new MqttCredsRepo(db);
 
-const tokenService = new TokenService(db);
 const deviceService = new DeviceService({ devicesRepo });
+const mqttCredService = new MqttCredService({ mqttCredsRepo });
+const onboardingService = new OnboardingService({ deviceService, mqttCredService });
 
-app.locals.services = { tokenService, deviceService };
+app.locals.services = { deviceService, mqttCredService, onboardingService };
 
 // Middleware: simple logger
 app.use((req, res, next) => {
@@ -62,16 +60,8 @@ app.use((req, res, next) => {
 // Parse JSON bodies
 app.use(express.json());
 
-// Serve static files (CSS, JS, HTML)
-app.use(express.static(path.join(__dirname, 'public')));
-
 // Mount routes under /api
 app.use('/api', routes);
-
-// Serve QRHub page (GET /QRHub)
-app.get('/QRHub', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'QRHub.html'));
-});
 
 // Start server
 const server = app.listen(PORT, () => {

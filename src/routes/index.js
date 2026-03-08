@@ -1,18 +1,113 @@
 import express from 'express';
-import tokenUtils from '../tokenUtils.js';
-import CDatabaseManager from '../database/CDatabaseManager.js';
-import DevicesRepo from '../repos/DevicesRepo.js';
-import DeviceService from '../services/DeviceService.js';
-import TokenService from '../services/TokenService.js';
 import logMessage from '../utils/logger.js';
 
 const router = express.Router();
 
-// Define a simple route
+// Health route
 router.get('/', (req, res) => {
-    const testToken = tokenUtils.generateToken();
-    const hashToken = tokenUtils.hashToken(testToken);
-    res.json({ testToken, hashToken });
+    res.json({ success: true, message: 'SmartPot API is running' });
+});
+
+router.post('/onboarding/challenge', async (req, res) => {
+    const unique_id = req.body && typeof req.body.unique_id === 'string'
+        ? req.body.unique_id.trim()
+        : '';
+
+    logMessage(`[Challenge] Received unique_id: "${unique_id}" (raw body: ${JSON.stringify(req.body)})`);
+
+    try {
+        const { onboardingService } = req.app.locals.services;
+        const challengeResult = await onboardingService.createChallenge(unique_id);
+
+        if (!challengeResult.ok) {
+            logMessage(`[Challenge] Error for unique_id="${unique_id}": ${challengeResult.error}`);
+            let statusCode = 500;
+            if (challengeResult.error === 'unique_id is required') statusCode = 400;
+            else if (challengeResult.error === 'device_not_found') statusCode = 404;
+            else if (challengeResult.error === 'device already claimed') statusCode = 409;
+
+            return res.status(statusCode).json({
+                success: false,
+                error: challengeResult.error
+            });
+        }
+
+        logMessage(`[Challenge] Successfully created challenge for unique_id="${unique_id}"`);
+        return res.status(200).json({
+            success: true,
+            unique_id,
+            challenge: challengeResult.challenge,
+            expires_in_ms: challengeResult.expires_in_ms
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            error: err.message || 'internal server error'
+        });
+    }
+});
+
+router.post('/onboarding/provision', async (req, res) => {
+    const unique_id = req.body && typeof req.body.unique_id === 'string'
+        ? req.body.unique_id.trim()
+        : '';
+    const challenge = req.body && typeof req.body.challenge === 'string'
+        ? req.body.challenge.trim()
+        : '';
+    const proof = req.body && typeof req.body.proof === 'string'
+        ? req.body.proof.trim()
+        : '';
+
+    try {
+        const { onboardingService } = req.app.locals.services;
+        const provisionResult = await onboardingService.provisionWithProof({
+            uniqueId: unique_id,
+            challenge,
+            proof
+        });
+
+        if (!provisionResult.ok) {
+            let statusCode = 500;
+            if (
+                provisionResult.error === 'unique_id is required' ||
+                provisionResult.error === 'challenge is required' ||
+                provisionResult.error === 'proof is required'
+            ) {
+                statusCode = 400;
+            } else if (provisionResult.error === 'device_not_found') {
+                statusCode = 404;
+            } else if (
+                provisionResult.error === 'device already claimed' ||
+                provisionResult.error === 'mqtt_credentials_for_device_exists' ||
+                provisionResult.error === 'mqtt_username_exists'
+            ) {
+                statusCode = 409;
+            } else if (
+                provisionResult.error === 'invalid or expired challenge' ||
+                provisionResult.error === 'invalid proof'
+            ) {
+                statusCode = 401;
+            }
+
+            return res.status(statusCode).json({
+                success: false,
+                error: provisionResult.error,
+                details: provisionResult.details
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Device provisioned successfully',
+            device: provisionResult.device,
+            mqtt_credentials: provisionResult.mqtt_credentials
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            error: err.message || 'internal server error'
+        });
+    }
 });
 
 // Route used by user to claim a device
@@ -27,79 +122,104 @@ router.get('/claim', async (req, res) => {
 
     // If token is provided, validate it
     try {
-        const deviceService = req.app.locals.services.deviceService;
-        const validation = await deviceService.validateToken(token);
+        const { deviceService, mqttCredService } = req.app.locals.services;
+        const validation = await mqttCredService.validateToken(token);
 
-        // If token not found -> log error
         if (!validation.ok) {
-            return res.status(500).json({ success: false, error: validation.error });
+            const statusCode = validation.error === 'no device found with that credential' ? 404 : 500;
+            return res.status(statusCode).json({ success: false, error: validation.error });
         }
-        // Update claim status of input token
-        const claimResult = await deviceService.claimDevice(token);
+
+        if (validation.device.is_claimed) {
+            return res.status(409).json({ success: false, error: 'device is already claimed' });
+        }
+
+        const claimResult = await deviceService.claimDeviceById(validation.device.id);
         if (!claimResult.ok) {
-            return res.status(500).json({ success: false, error: claimResult.error });
+            const statusCode = claimResult.error === 'device_already_claimed_or_missing' ? 409 : 500;
+            return res.status(statusCode).json({ success: false, error: claimResult.error });
         }
-        return res.status(200).json({ success: true, claimed_device: claimResult.device });
+
+        const claimedDevice = {
+            ...claimResult.device,
+            mqtt_username: validation.device.mqtt_username,
+            mqtt_credential_id: validation.device.mqtt_credential_id
+        };
+
+        return res.status(200).json({ success: true, claimed_device: claimedDevice });
     }
     catch (err) {
         return res.status(500).json({ success: false, message: 'Server error', error: err.message || String(err) });
     }
 });
 
-// ====== QRHub APIs ==============
+async function createDeviceHandler(req, res) {
+    const { unique_id } = req.body || {};
 
-router.post('/devices/insert', async (req, res) => {
-    const { unique_id, name, token_hash } = req.body;
+    const normalizedUniqueId = typeof unique_id === 'string' ? unique_id.trim() : '';
 
-    if (!unique_id || !token_hash) {
+    if (!normalizedUniqueId) {
         return res.status(400).json({
             success: false,
-            error: 'unique_id and token_hash are required'
+            error: 'unique_id is required'
         });
     }
 
-    const row = {
-        unique_id,
-        token_hash,
-        claimed: false,
-        name: name || null
-    };
-
     try {
-        const deviceService = req.app.locals.services.deviceService;
-        const insertResult = await deviceService.createDeviceRow(row);
+        const { deviceService } = req.app.locals.services;
 
-        if (!insertResult.ok) {
-            return res.status(500).json({
-                success: false,
-                error: insertResult.error || 'insert failed'
+        const deviceResult = await deviceService.createDeviceRow({
+            unique_id: normalizedUniqueId,
+            // Factory registration should not define user-facing nickname.
+            device_label: null,
+            is_claimed: false
+        });
+
+        if (deviceResult.ok) {
+            return res.status(201).json({
+                success: true,
+                created: true,
+                message: 'Device inserted successfully',
+                device: deviceResult.device
             });
         }
 
-        return res.status(201).json({
-            success: true,
-            message: 'Device inserted successfully',
-            device: insertResult.device
+        // Factory tools often retry. Treat duplicate unique_id as idempotent success.
+        if (deviceResult.error === 'unique_id_exists') {
+            const existingDeviceResult = await deviceService.getDeviceByUniqueId(normalizedUniqueId);
+            if (existingDeviceResult.ok) {
+                return res.status(200).json({
+                    success: true,
+                    created: false,
+                    message: 'Device already exists',
+                    device: existingDeviceResult.device
+                });
+            }
+
+            return res.status(409).json({
+                success: false,
+                error: 'unique_id_exists',
+                message: deviceResult.message || 'device with that unique_id already exists'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            error: deviceResult.error || 'device insert failed',
+            message: deviceResult.message
         });
     } catch (err) {
-        logMessage('Error inserting device:', err);
+        logMessage(`Error inserting device: ${err.message || String(err)}`);
         return res.status(500).json({
             success: false,
             error: err.message || 'Internal server error'
         });
     }
-});
+}
 
-router.get('/token/generate', async (req, res) => {
-    try {
-    const {tokenService} = req.app.locals.services;
-    const { token, tokenHash, claimUrl } = tokenService.generateClaimToken();
+// router.post('/devices', createDeviceHandler);
 
-    // return what the frontend expects
-    return res.status(201).json({ success: true, token, token_hash: tokenHash, claimUrl });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message || String(err) });
-  }
-});
+// Backward-compatible alias used by older factory tooling.
+router.post('/devices/insert', createDeviceHandler);
 
 export default router;
