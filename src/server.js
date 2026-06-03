@@ -10,6 +10,7 @@ import MqttCredService from './services/MqttCredService.js';
 import OnboardingService from './services/OnboardingService.js';
 
 function buildSmartPotConfigFromEnv() {
+  const isProduction = process.env.NODE_ENV === 'production';
   const connectionString = process.env.DATABASE_URL || null;
 
   // Hosted DB (Aiven/Render/etc.)
@@ -21,6 +22,20 @@ function buildSmartPotConfigFromEnv() {
     }
   }
 }
+
+  if (isProduction) {
+    const hasDiscretePgConfig =
+      !!process.env.PGHOST &&
+      !!process.env.PGDATABASE &&
+      !!process.env.PGUSER &&
+      !!process.env.PGPASSWORD;
+
+    if (!hasDiscretePgConfig) {
+      throw new Error(
+        'Database is not configured in production. Set DATABASE_URL or PGHOST/PGDATABASE/PGUSER/PGPASSWORD.'
+      );
+    }
+  }
 
   // Local DB defaults (usually no TLS locally)
   return {
