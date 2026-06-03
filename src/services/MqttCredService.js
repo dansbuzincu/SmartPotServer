@@ -51,14 +51,14 @@ class MqttCredService {
     buildProvisionedCredentials({ uniqueId, deviceId }) {
         // For free HiveMQ plan: return shared credentials + client ID
         const sharedCreds = this.getSharedEspCredentials();
+        const mqttClientId = this.buildMqttClientId(uniqueId, deviceId);
         return {
             mqtt_username: sharedCreds.mqtt_username,
             mqtt_password: sharedCreds.mqtt_password,
-            mqtt_client_id: this.buildMqttClientId(uniqueId, deviceId),
+            mqtt_client_id: mqttClientId,
             mqtt_broker_url: process.env.MQTT_BROKER_URL || 'localhost',
             mqtt_broker_port: parseInt(process.env.MQTT_BROKER_PORT || '8883', 10),
-            // Store client_id in DB for tracking (backwards compatible field name)
-            mqtt_password_encrypted: this.buildMqttClientId(uniqueId, deviceId)
+            auth_mode: 'shared_password'
         };
     }
 
@@ -68,7 +68,7 @@ class MqttCredService {
             mqtt_username: this.buildDefaultMqttUsername(uniqueId, deviceId),
             mqtt_password: this.buildGeneratedMqttPassword(),
             mqtt_client_id: this.buildMqttClientId(uniqueId, deviceId),
-            mqtt_password_encrypted: this.buildGeneratedMqttPassword()
+            auth_mode: 'unique_password'
         };
     }
 
@@ -85,14 +85,21 @@ class MqttCredService {
             }
 
             newRow.device_id = normalizedDeviceId;
+            newRow.auth_mode = typeof rowObj.auth_mode === 'string' && rowObj.auth_mode.trim()
+                ? rowObj.auth_mode.trim()
+                : 'shared_password';
+            newRow.mqtt_client_id = typeof rowObj.mqtt_client_id === 'string' && rowObj.mqtt_client_id.trim()
+                ? rowObj.mqtt_client_id.trim()
+                : this.buildMqttClientId(rowObj.unique_id, normalizedDeviceId);
             const providedUsername = typeof rowObj.mqtt_username === 'string' ? rowObj.mqtt_username.trim() : '';
             newRow.mqtt_username = providedUsername || this.buildDefaultMqttUsername(rowObj.unique_id, normalizedDeviceId);
-
-            if (typeof rowObj.mqtt_password_encrypted === 'string' && rowObj.mqtt_password_encrypted.trim()) {
-                newRow.mqtt_password_encrypted = rowObj.mqtt_password_encrypted.trim();
-            } else {
-                return { ok: false, error: 'mqtt_password_encrypted is required' };
-            }
+            newRow.mqtt_password = typeof rowObj.mqtt_password === 'string' && rowObj.mqtt_password.trim()
+                ? rowObj.mqtt_password.trim()
+                : null;
+            newRow.certificate_fingerprint = typeof rowObj.certificate_fingerprint === 'string' && rowObj.certificate_fingerprint.trim()
+                ? rowObj.certificate_fingerprint.trim()
+                : null;
+            newRow.active = typeof rowObj.active === 'boolean' ? rowObj.active : true;
         } else {
             const normalizedDeviceId = Number(deviceId);
             if (!Number.isInteger(normalizedDeviceId) || normalizedDeviceId <= 0) {
@@ -100,14 +107,15 @@ class MqttCredService {
             }
 
             newRow.device_id = normalizedDeviceId;
+            newRow.auth_mode = 'shared_password';
+            newRow.mqtt_client_id = this.buildMqttClientId(null, normalizedDeviceId);
             const providedUsername = typeof mqttUsername === 'string' ? mqttUsername.trim() : '';
             newRow.mqtt_username = providedUsername || this.buildDefaultMqttUsername(null, normalizedDeviceId);
-
-            if (typeof mqttPasswordEncrypted !== 'string' || !mqttPasswordEncrypted.trim()) {
-                return { ok: false, error: 'mqtt_password_encrypted is required when calling with positional args' };
-            }
-
-            newRow.mqtt_password_encrypted = mqttPasswordEncrypted.trim();
+            newRow.mqtt_password = typeof mqttPasswordEncrypted === 'string' && mqttPasswordEncrypted.trim()
+                ? mqttPasswordEncrypted.trim()
+                : null;
+            newRow.certificate_fingerprint = null;
+            newRow.active = true;
         }
 
         return await this.mqttCredsRepo.insertRow(newRow);
@@ -125,17 +133,7 @@ class MqttCredService {
         if (directLookup.ok) {
             return directLookup;
         }
-        if (directLookup.error !== 'no device found with that credential') {
-            return directLookup;
-        }
-
-        // Backward-compatible claim flow: QR carries raw token while DB stores a hash.
-        const tokenHash = tokenUtils.hashToken(candidate);
-        if (tokenHash === candidate) {
-            return directLookup;
-        }
-
-        return await this.mqttCredsRepo.queryDeviceByCredentialValue(tokenHash);
+        return directLookup;
     }
 
     async deleteMqttCredByDeviceId(deviceId) {

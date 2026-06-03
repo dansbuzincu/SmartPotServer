@@ -58,6 +58,8 @@ router.post('/onboarding/provision', async (req, res) => {
         ? req.body.proof.trim()
         : '';
 
+    logMessage(`[Provision] Received unique_id: "${unique_id}" (raw body: ${JSON.stringify(req.body)})`);
+
     try {
         const { onboardingService } = req.app.locals.services;
         const provisionResult = await onboardingService.provisionWithProof({
@@ -77,9 +79,9 @@ router.post('/onboarding/provision', async (req, res) => {
             } else if (provisionResult.error === 'device_not_found') {
                 statusCode = 404;
             } else if (
-                provisionResult.error === 'device already claimed' ||
-                provisionResult.error === 'mqtt_credentials_for_device_exists' ||
-                provisionResult.error === 'mqtt_username_exists'
+                    provisionResult.error === 'device already claimed' ||
+                    provisionResult.error === 'mqtt_provisioning_for_device_exists' ||
+                    provisionResult.error === 'mqtt_client_id_exists'
             ) {
                 statusCode = 409;
             } else if (
@@ -89,12 +91,16 @@ router.post('/onboarding/provision', async (req, res) => {
                 statusCode = 401;
             }
 
+            logMessage(`[Provision] Error for unique_id="${unique_id}": ${provisionResult.error}`);
+
             return res.status(statusCode).json({
                 success: false,
                 error: provisionResult.error,
                 details: provisionResult.details
             });
         }
+
+        logMessage(`[Provision] Successfully provisioned unique_id="${unique_id}"`);
 
         return res.status(200).json({
             success: true,
@@ -143,7 +149,9 @@ router.get('/claim', async (req, res) => {
         const claimedDevice = {
             ...claimResult.device,
             mqtt_username: validation.device.mqtt_username,
-            mqtt_credential_id: validation.device.mqtt_credential_id
+                mqtt_provisioning_id: validation.device.mqtt_provisioning_id,
+                auth_mode: validation.device.auth_mode,
+                mqtt_client_id: validation.device.mqtt_client_id
         };
 
         return res.status(200).json({ success: true, claimed_device: claimedDevice });

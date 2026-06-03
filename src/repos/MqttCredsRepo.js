@@ -8,20 +8,28 @@ class MqttCredsRepo {
 
     async insertRow(row) {
         const queryText =
-            'INSERT INTO mqtt_credentials (device_id, mqtt_username, mqtt_password_encrypted) VALUES ($1, $2, $3) RETURNING *';
-        const queryValues = [row.device_id, row.mqtt_username, row.mqtt_password_encrypted];
+            'INSERT INTO device_mqtt_provisioning (device_id, auth_mode, mqtt_client_id, mqtt_username, mqtt_password, certificate_fingerprint, active) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *';
+        const queryValues = [
+            row.device_id,
+            row.auth_mode,
+            row.mqtt_client_id,
+            row.mqtt_username || null,
+            row.mqtt_password || null,
+            row.certificate_fingerprint || null,
+            row.active !== false
+        ];
 
         const result = await this.database.query(queryText, queryValues);
         if (!result || !result.ok || !result.rows || result.rows.length === 0) {
             const dbError = result && result.error ? result.error : 'insert failed, no rows returned';
 
-            if (typeof dbError === 'string' && dbError.includes('mqtt_credentials_mqtt_username_key')) {
-                return { ok: false, error: 'mqtt_username_exists', message: 'mqtt username already exists' };
+            if (typeof dbError === 'string' && dbError.includes('device_mqtt_provisioning_mqtt_client_id_key')) {
+                return { ok: false, error: 'mqtt_client_id_exists', message: 'mqtt client id already exists' };
             }
-            if (typeof dbError === 'string' && dbError.includes('mqtt_credentials_device_id_key')) {
-                return { ok: false, error: 'mqtt_credentials_for_device_exists', message: 'device already has mqtt credentials' };
+            if (typeof dbError === 'string' && dbError.includes('device_mqtt_provisioning_device_id_key')) {
+                return { ok: false, error: 'mqtt_provisioning_for_device_exists', message: 'device already has mqtt provisioning' };
             }
-            if (typeof dbError === 'string' && dbError.includes('mqtt_credentials_device_id_fkey')) {
+            if (typeof dbError === 'string' && dbError.includes('device_mqtt_provisioning_device_id_fkey')) {
                 return { ok: false, error: 'device_not_found', message: 'device_id does not exist' };
             }
 
@@ -38,13 +46,17 @@ class MqttCredsRepo {
                 d.unique_id,
                 d.device_label,
                 d.is_claimed,
-                c.id AS mqtt_credential_id,
-                c.mqtt_username,
-                c.mqtt_password_encrypted
-            FROM mqtt_credentials AS c
+                p.id AS mqtt_provisioning_id,
+                p.auth_mode,
+                p.mqtt_client_id,
+                p.mqtt_username,
+                p.mqtt_password,
+                p.certificate_fingerprint,
+                p.active
+            FROM device_mqtt_provisioning AS p
             INNER JOIN devices AS d
-                ON d.id = c.device_id
-            WHERE c.mqtt_password_encrypted = $1
+                ON d.id = p.device_id
+            WHERE p.mqtt_client_id = $1
             LIMIT 1;
         `;
 
@@ -60,7 +72,7 @@ class MqttCredsRepo {
     }
 
     async deleteByDeviceId(deviceId) {
-        const queryText = 'DELETE FROM mqtt_credentials WHERE device_id = $1 RETURNING id';
+        const queryText = 'DELETE FROM device_mqtt_provisioning WHERE device_id = $1 RETURNING id';
         const queryValues = [deviceId];
 
         const result = await this.database.query(queryText, queryValues);
@@ -74,10 +86,6 @@ class MqttCredsRepo {
         return { ok: true, deleted: true };
     }
 
-    // Backward-compatible alias.
-    async queryDeviceByPasswordHash(passwordHash) {
-        return this.queryDeviceByCredentialValue(passwordHash);
-    }
 }
 
 export default MqttCredsRepo;

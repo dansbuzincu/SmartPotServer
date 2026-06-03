@@ -181,14 +181,16 @@ class OnboardingService {
         const credentialResult = await this.mqttCredService.createMqttCredRow({
             device_id: device.id,
             unique_id: normalizedUniqueId,
+            auth_mode: 'shared_password',
+            mqtt_client_id: generatedCreds.mqtt_client_id,
             mqtt_username: generatedCreds.mqtt_username,
-            mqtt_password_encrypted: generatedCreds.mqtt_password_encrypted
+            mqtt_password: generatedCreds.mqtt_password
         });
 
         if (!credentialResult.ok) {
             if (
-                credentialResult.error === 'mqtt_credentials_for_device_exists' ||
-                credentialResult.error === 'mqtt_username_exists'
+                credentialResult.error === 'mqtt_provisioning_for_device_exists' ||
+                credentialResult.error === 'mqtt_client_id_exists'
             ) {
                 return { ok: false, error: credentialResult.error };
             }
