@@ -279,10 +279,15 @@ class TelemetryService {
         };
 
         const f = this._flattenPayload(payload);
+        const receivedAt = new Date();
+        const parsedMeasuredAt = f.measured_at ? new Date(f.measured_at) : null;
+        const measuredAt = parsedMeasuredAt && !Number.isNaN(parsedMeasuredAt.getTime())
+            ? parsedMeasuredAt
+            : receivedAt;
 
         return {
-            measured_at:       f.measured_at ? new Date(f.measured_at) : null,
-            received_at:       new Date(),
+            measured_at:       measuredAt,
+            received_at:       receivedAt,
             temperature_c:     toFloatOrNull(f.temperature_c     ?? f.temperature),
             humidity_pct:      toFloatOrNull(f.humidity_pct      ?? f.humidity),
             pressure_hpa:      toFloatOrNull(f.pressure_hpa      ?? f.pressure),
