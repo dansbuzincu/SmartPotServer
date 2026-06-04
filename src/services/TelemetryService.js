@@ -51,14 +51,44 @@ class TelemetryService {
     start() {
         if (this.client) return;
 
-        const brokerUrl  = process.env.MQTT_BROKER_URL  || 'mqtt://localhost';
-        const brokerPort = parseInt(process.env.MQTT_BROKER_PORT || '1883', 10);
+        const rawBrokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost';
+        const sanitizedBrokerUrl = String(rawBrokerUrl).trim().replace(/^['"]|['"]$/g, '');
+
+        let protocol = 'mqtt';
+        let host = sanitizedBrokerUrl;
+        let brokerPort = parseInt(process.env.MQTT_BROKER_PORT || '1883', 10);
+
+        // Support both forms:
+        // 1) MQTT_BROKER_URL=mqtts://host
+        // 2) MQTT_BROKER_URL=host
+        if (/^mqtts?:\/\//i.test(sanitizedBrokerUrl)) {
+            try {
+                const parsed = new URL(sanitizedBrokerUrl);
+                protocol = parsed.protocol.replace(':', '').toLowerCase();
+                host = parsed.hostname;
+                if (parsed.port) {
+                    const parsedPort = Number.parseInt(parsed.port, 10);
+                    if (Number.isInteger(parsedPort) && parsedPort > 0) {
+                        brokerPort = parsedPort;
+                    }
+                }
+            } catch {
+                console.warn(`[TelemetryService] Invalid MQTT_BROKER_URL="${sanitizedBrokerUrl}", falling back to defaults`);
+            }
+        }
+
+        // If no explicit scheme is provided, infer secure transport on 8883.
+        if (!/^mqtts?:\/\//i.test(sanitizedBrokerUrl) && brokerPort === 8883) {
+            protocol = 'mqtts';
+        }
+
         const username   = process.env.MQTT_SERVER_USERNAME || process.env.MQTT_SHARED_APP_USERNAME || null;
         const password   = process.env.MQTT_SERVER_PASSWORD || process.env.MQTT_SHARED_APP_PASSWORD || null;
         const clientId   = `smartpot-server-telemetry-${Math.random().toString(36).slice(2, 10)}`;
 
         const connectOptions = {
-            host: brokerUrl.replace(/^mqtts?:\/\//, ''),
+            protocol,
+            host,
             port: brokerPort,
             clientId,
             clean: true,
@@ -69,12 +99,7 @@ class TelemetryService {
         if (username) connectOptions.username = username;
         if (password) connectOptions.password = password;
 
-        // Use TLS when the broker URL scheme is mqtts://
-        if (brokerUrl.startsWith('mqtts://')) {
-            connectOptions.protocol = 'mqtts';
-        }
-
-        console.log(`[TelemetryService] Connecting to ${brokerUrl}:${brokerPort} as ${clientId}`);
+        console.log(`[TelemetryService] Connecting to ${protocol}://${host}:${brokerPort} as ${clientId}`);
         this.client = mqtt.connect(connectOptions);
 
         this.client.on('connect', () => {
@@ -104,6 +129,10 @@ class TelemetryService {
 
         this.client.on('close', () => {
             console.log('[TelemetryService] MQTT connection closed');
+        });
+
+        this.client.on('offline', () => {
+            console.log('[TelemetryService] MQTT client is offline');
         });
     }
 

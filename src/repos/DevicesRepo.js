@@ -73,6 +73,28 @@ class DevicesRepo {
         return { ok: true, device: result.rows[0] };
     }
 
+    async queryByIdentifier(identifier) {
+        const queryText = `
+            SELECT *
+            FROM devices
+            WHERE unique_id = $1
+               OR CAST(id AS TEXT) = $1
+               OR device_label = $1
+            LIMIT 1;
+        `;
+        const queryValues = [identifier];
+
+        const result = await this.database.query(queryText, queryValues);
+        if (!result || !result.ok) {
+            return { ok: false, error: (result && result.error) || 'query failed' };
+        }
+        if (!result.rows || result.rows.length === 0) {
+            return { ok: false, error: 'device_not_found' };
+        }
+
+        return { ok: true, device: result.rows[0] };
+    }
+
     async deleteById(deviceId) {
         const queryText = 'DELETE FROM devices WHERE id = $1 RETURNING id';
         const queryValues = [deviceId];

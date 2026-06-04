@@ -237,12 +237,12 @@ async function resolveDeviceIdByUniqueId(req, uniqueId) {
     }
 
     const { deviceService } = req.app.locals.services;
-    const deviceResult = await deviceService.getDeviceByUniqueId(normalizedUniqueId);
+    const deviceResult = await deviceService.getDeviceByIdentifier(normalizedUniqueId);
     if (!deviceResult.ok || !deviceResult.device) {
         return { ok: false, error: 'device_not_found' };
     }
 
-    return { ok: true, deviceId: deviceResult.device.id };
+    return { ok: true, deviceId: deviceResult.device.id, device: deviceResult.device };
 }
 
 function parseTelemetryHistoryQuery(req) {
@@ -283,6 +283,11 @@ router.get('/devices/by-unique-id/:uniqueId/telemetry/latest', async (req, res) 
 
         return res.status(200).json({
             success: true,
+            device: {
+                id: resolved.device.id,
+                unique_id: resolved.device.unique_id,
+                device_label: resolved.device.device_label
+            },
             telemetry: latestResult.telemetry
         });
     } catch (err) {
@@ -316,6 +321,11 @@ router.get('/devices/by-unique-id/:uniqueId/telemetry/history', async (req, res)
 
         return res.status(200).json({
             success: true,
+            device: {
+                id: resolved.device.id,
+                unique_id: resolved.device.unique_id,
+                device_label: resolved.device.device_label
+            },
             history: historyResult.history
         });
     } catch (err) {
@@ -378,100 +388,6 @@ router.get('/devices/:deviceId/telemetry/history', async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            history: historyResult.history
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message || 'internal server error' });
-    }
-});
-
-router.get('/devices/by-unique-id/:uniqueId/telemetry/latest', async (req, res) => {
-    const uniqueId = req.params && typeof req.params.uniqueId === 'string'
-        ? req.params.uniqueId.trim()
-        : '';
-
-    if (!uniqueId) {
-        return res.status(400).json({ success: false, error: 'unique_id is required' });
-    }
-
-    try {
-        const { deviceService, telemetryService } = req.app.locals.services;
-        const deviceResult = await deviceService.getDeviceByUniqueId(uniqueId);
-        if (!deviceResult.ok || !deviceResult.device) {
-            return res.status(404).json({ success: false, error: 'device_not_found' });
-        }
-
-        const latestResult = await telemetryService.getLatestTelemetryByDeviceId(deviceResult.device.id);
-        if (!latestResult.ok) {
-            if (latestResult.error === 'telemetry_not_found') {
-                return res.status(404).json({ success: false, error: 'telemetry_not_found' });
-            }
-            return res.status(500).json({ success: false, error: latestResult.error || 'internal_server_error' });
-        }
-
-        return res.status(200).json({
-            success: true,
-            device: {
-                id: deviceResult.device.id,
-                unique_id: deviceResult.device.unique_id,
-                device_label: deviceResult.device.device_label
-            },
-            telemetry: latestResult.telemetry
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message || 'internal server error' });
-    }
-});
-
-router.get('/devices/by-unique-id/:uniqueId/telemetry/history', async (req, res) => {
-    const uniqueId = req.params && typeof req.params.uniqueId === 'string'
-        ? req.params.uniqueId.trim()
-        : '';
-
-    if (!uniqueId) {
-        return res.status(400).json({ success: false, error: 'unique_id is required' });
-    }
-
-    const now = Date.now();
-    const defaultFrom = new Date(now - 24 * 60 * 60 * 1000);
-    const defaultTo = new Date(now);
-
-    const from = req.query && typeof req.query.from === 'string' ? new Date(req.query.from) : defaultFrom;
-    const to = req.query && typeof req.query.to === 'string' ? new Date(req.query.to) : defaultTo;
-
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
-        return res.status(400).json({ success: false, error: 'invalid_date_range' });
-    }
-
-    const rawLimit = req.query && typeof req.query.limit === 'string'
-        ? Number.parseInt(req.query.limit, 10)
-        : 200;
-    const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 200;
-
-    try {
-        const { deviceService, telemetryService } = req.app.locals.services;
-        const deviceResult = await deviceService.getDeviceByUniqueId(uniqueId);
-        if (!deviceResult.ok || !deviceResult.device) {
-            return res.status(404).json({ success: false, error: 'device_not_found' });
-        }
-
-        const historyResult = await telemetryService.getTelemetryHistoryByDeviceId(deviceResult.device.id, {
-            from,
-            to,
-            limit
-        });
-
-        if (!historyResult.ok) {
-            return res.status(500).json({ success: false, error: historyResult.error || 'internal_server_error' });
-        }
-
-        return res.status(200).json({
-            success: true,
-            device: {
-                id: deviceResult.device.id,
-                unique_id: deviceResult.device.unique_id,
-                device_label: deviceResult.device.device_label
-            },
             history: historyResult.history
         });
     } catch (err) {

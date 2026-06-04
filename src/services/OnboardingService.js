@@ -102,7 +102,23 @@ class OnboardingService {
             return { ok: false, error: 'unique_id is required' };
         }
 
-        const deviceResult = await this.deviceService.getDeviceByUniqueId(normalizedUniqueId);
+        let deviceResult = await this.deviceService.getDeviceByUniqueId(normalizedUniqueId);
+        if (!deviceResult.ok && deviceResult.error === 'device_not_found') {
+            // TODO: Remove auto-registration once factory registration flow is enforced end-to-end.
+            // Temporary bootstrap behavior after local DB wipes: create missing device row on first challenge.
+            const createResult = await this.deviceService.createDeviceRow({
+                unique_id: normalizedUniqueId,
+                device_label: null,
+                is_claimed: false
+            });
+
+            if (!createResult.ok) {
+                return { ok: false, error: createResult.error || 'failed to auto-register device' };
+            }
+
+            deviceResult = { ok: true, device: createResult.device };
+        }
+
         if (!deviceResult.ok) {
             return { ok: false, error: deviceResult.error };
         }

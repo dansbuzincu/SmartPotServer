@@ -47,6 +47,13 @@ class DeviceService {
       return await this.devicesRepo.queryByUniqueId(uniqueId.trim());
     }
 
+    async getDeviceByIdentifier(identifier) {
+      if (typeof identifier !== 'string' || !identifier.trim()) {
+        return { ok: false, error: 'identifier is required' };
+      }
+      return await this.devicesRepo.queryByIdentifier(identifier.trim());
+    }
+
     async deleteDeviceById(deviceId) {
         const normalizedId = Number(deviceId);
         if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
