@@ -159,9 +159,6 @@ class OnboardingService {
         }
 
         const device = deviceResult.device;
-        if (device.is_claimed) {
-            return { ok: false, error: 'device already claimed' };
-        }
 
         const deviceSecret = this.getDeviceSecret(normalizedUniqueId);
         if (!deviceSecret) {
@@ -171,6 +168,29 @@ class OnboardingService {
         const expectedProof = this.computeExpectedProof(deviceSecret, normalizedChallenge).toLowerCase();
         if (!this.isProofValid(expectedProof, normalizedProof)) {
             return { ok: false, error: 'invalid proof' };
+        }
+
+        // TODO: Restrict re-provisioning for already-claimed devices once secure device/session binding is in place.
+        // Temporary behavior: allow already provisioned devices to fetch MQTT credentials again.
+        if (device.is_claimed) {
+            const existingCreds = this.mqttCredService.buildProvisionedCredentials({
+                uniqueId: normalizedUniqueId,
+                deviceId: device.id
+            });
+
+            this.pendingChallenges.delete(normalizedUniqueId);
+
+            return {
+                ok: true,
+                device,
+                mqtt_credentials: {
+                    mqtt_username: existingCreds.mqtt_username,
+                    mqtt_password: existingCreds.mqtt_password,
+                    mqtt_client_id: existingCreds.mqtt_client_id,
+                    mqtt_broker_url: existingCreds.mqtt_broker_url,
+                    mqtt_broker_port: existingCreds.mqtt_broker_port
+                }
+            };
         }
 
         const generatedCreds = this.mqttCredService.buildProvisionedCredentials({
@@ -192,7 +212,24 @@ class OnboardingService {
                 credentialResult.error === 'mqtt_provisioning_for_device_exists' ||
                 credentialResult.error === 'mqtt_client_id_exists'
             ) {
-                return { ok: false, error: credentialResult.error };
+                const existingCreds = this.mqttCredService.buildProvisionedCredentials({
+                    uniqueId: normalizedUniqueId,
+                    deviceId: device.id
+                });
+
+                this.pendingChallenges.delete(normalizedUniqueId);
+
+                return {
+                    ok: true,
+                    device,
+                    mqtt_credentials: {
+                        mqtt_username: existingCreds.mqtt_username,
+                        mqtt_password: existingCreds.mqtt_password,
+                        mqtt_client_id: existingCreds.mqtt_client_id,
+                        mqtt_broker_url: existingCreds.mqtt_broker_url,
+                        mqtt_broker_port: existingCreds.mqtt_broker_port
+                    }
+                };
             }
             return { ok: false, error: credentialResult.error || 'mqtt provisioning failed' };
         }
