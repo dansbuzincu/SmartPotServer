@@ -230,4 +230,78 @@ async function createDeviceHandler(req, res) {
 // Backward-compatible alias used by older factory tooling.
 router.post('/devices/insert', createDeviceHandler);
 
+router.get('/devices/:deviceId/telemetry/latest', async (req, res) => {
+    const rawDeviceId = req.params && req.params.deviceId;
+    const deviceId = Number.parseInt(rawDeviceId, 10);
+
+    if (!Number.isInteger(deviceId) || deviceId <= 0) {
+        return res.status(400).json({ success: false, error: 'invalid_device_id' });
+    }
+
+    try {
+        const { telemetryService } = req.app.locals.services;
+        const latestResult = await telemetryService.getLatestTelemetryByDeviceId(deviceId);
+
+        if (!latestResult.ok) {
+            if (latestResult.error === 'telemetry_not_found') {
+                return res.status(404).json({ success: false, error: 'device_not_found' });
+            }
+            return res.status(500).json({ success: false, error: latestResult.error || 'internal_server_error' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            telemetry: latestResult.telemetry
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message || 'internal server error' });
+    }
+});
+
+router.get('/devices/:deviceId/telemetry/history', async (req, res) => {
+    const rawDeviceId = req.params && req.params.deviceId;
+    const deviceId = Number.parseInt(rawDeviceId, 10);
+
+    if (!Number.isInteger(deviceId) || deviceId <= 0) {
+        return res.status(400).json({ success: false, error: 'invalid_device_id' });
+    }
+
+    const now = Date.now();
+    const defaultFrom = new Date(now - 24 * 60 * 60 * 1000);
+    const defaultTo = new Date(now);
+
+    const from = req.query && typeof req.query.from === 'string' ? new Date(req.query.from) : defaultFrom;
+    const to = req.query && typeof req.query.to === 'string' ? new Date(req.query.to) : defaultTo;
+
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        return res.status(400).json({ success: false, error: 'invalid_date_range' });
+    }
+    if (from > to) {
+        return res.status(400).json({ success: false, error: 'invalid_date_range' });
+    }
+
+    const rawLimit = req.query && typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 200;
+    const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 200;
+
+    try {
+        const { telemetryService } = req.app.locals.services;
+        const historyResult = await telemetryService.getTelemetryHistoryByDeviceId(deviceId, {
+            from,
+            to,
+            limit
+        });
+
+        if (!historyResult.ok) {
+            return res.status(500).json({ success: false, error: historyResult.error || 'internal_server_error' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            history: historyResult.history
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message || 'internal server error' });
+    }
+});
+
 export default router;

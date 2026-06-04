@@ -8,6 +8,8 @@ import MqttCredsRepo from './repos/MqttCredsRepo.js';
 import DeviceService from './services/DeviceService.js';
 import MqttCredService from './services/MqttCredService.js';
 import OnboardingService from './services/OnboardingService.js';
+import TelemetryRepo from './repos/TelemetryRepo.js';
+import TelemetryService from './services/TelemetryService.js';
 
 function buildSmartPotConfigFromEnv() {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -64,7 +66,10 @@ const deviceService = new DeviceService({ devicesRepo });
 const mqttCredService = new MqttCredService({ mqttCredsRepo });
 const onboardingService = new OnboardingService({ deviceService, mqttCredService });
 
-app.locals.services = { deviceService, mqttCredService, onboardingService };
+const telemetryRepo = new TelemetryRepo(db);
+const telemetryService = new TelemetryService({ telemetryRepo, deviceService });
+
+app.locals.services = { deviceService, mqttCredService, onboardingService, telemetryService };
 
 // Middleware: simple logger
 app.use((req, res, next) => {
@@ -83,6 +88,9 @@ const server = app.listen(PORT, () => {
     logger(`Server is running on http://localhost:${PORT}`);
 });
 
+// Start MQTT telemetry listener
+telemetryService.start();
+
 // Graceful shutdown
 let shuttingDown = false;
 
@@ -96,6 +104,12 @@ async function shutdown(signal) {
   server.close(async (err) => {
     if (err) {
       console.error("Error closing HTTP server:", err);
+    }
+
+    try {
+      await telemetryService.shutdown();
+    } catch (e) {
+      console.error("Error shutting down TelemetryService:", e);
     }
 
     try {

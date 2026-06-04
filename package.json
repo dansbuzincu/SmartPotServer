@@ -11,6 +11,7 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^4.17.1",
+    "mqtt": "^5.15.1",
     "pg": "^8.18.0"
   },
   "devDependencies": {
