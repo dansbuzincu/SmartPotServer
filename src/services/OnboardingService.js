@@ -107,9 +107,8 @@ class OnboardingService {
             return { ok: false, error: deviceResult.error };
         }
 
-        if (deviceResult.device.is_claimed) {
-            return { ok: false, error: 'device already claimed' };
-        }
+        // TODO: Reintroduce claim-state restriction once secure re-provisioning policy is finalized.
+        // Temporary behavior: allow claimed devices to request a fresh challenge for credential refresh.
 
         const deviceSecret = this.getDeviceSecret(normalizedUniqueId);
         if (!deviceSecret) {
